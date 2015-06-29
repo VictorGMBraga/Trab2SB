@@ -28,7 +28,7 @@ typedef map <LineNumber, Tokens>                                    CodeLines;
 typedef map <Instruction, tuple<OperandsQty, OpCode, SizeInCode> >  Instructions;
 typedef map <Directive, tuple<OperandsQty, SizeInCode> >            Directives;
 typedef map <Label, MemPos>                                         Labels;
-typedef map <Label, int>                                            Defines;
+typedef map <Label, string>                                         Defines;
 
 Errors          errors;
 CodeLines       codeLines;
@@ -127,21 +127,17 @@ void getLabels () {
         // Se achou ':' no fim do primeiro token da linha
         if (":" == it->second.front().substr(it->second.front().length() - 1, 1)) {
  
-            //cout << it->second.front() << endl;
-
             // Tira o ':'
             string tempLabel = it->second.front().substr(0, it->second.front().length() - 1);
-            
-            
 
-                
-            //if("EQU" == it->second.begin() + 1){
-                //defines[it->second.begin()] = it->second.begin() + 2;
-            //}
-            //else{
-                // Adiciona na tabela de Labels
+            // Caso seja um EQU
+            // Adiciona na tabela de defines    
+            if ("EQU" == it->second[1]) {
+                defines[tempLabel] = it->second[2];
+            // Senao adiciona na tabela de Labels
+            } else {
                 labels[tempLabel] = memPos;
-            //}
+            }
 
             // Apaga o Label do código
             it->second.erase(it->second.begin());
@@ -160,7 +156,6 @@ void getLabels () {
 // Compilacao em si. Gera o codigo objeto.
 void compile () {
  
-    //string output;
     stringstream tempSS;
 
     int memPos = 0;
@@ -182,7 +177,7 @@ void compile () {
             // O numero de operandos esta incorreto
             if (codeLine->second.size() - 1 != get<0>(instructions[codeLine->second.front()])){
                 tempSS << codeLine->first;
-                errors.push("ERRO SINTATICO NA LINHA " + tempSS.str() + ": O Numero de operandos da instrucao "+codeLine->second.front() + " esta incorreto.");
+                errors.push("ERRO NA LINHA " + tempSS.str() + ": O Numero de operandos da instrucao "+codeLine->second.front() + " esta incorreto.");
                 tempSS.str("");
                 continue;
             }
@@ -191,7 +186,7 @@ void compile () {
             for (Tokens::iterator token = codeLine->second.begin() + 1; token != codeLine->second.end(); ++token) {
          
 
-                *token = token->substr(0,token->find("+"));
+                //*token = token->substr(0,token->find("+"));
 
 
                 // Achou um label na tabela
@@ -199,6 +194,15 @@ void compile () {
                     
                     // Escreve o endereco do label
                     tempSS << labels[*token];
+                    output.append(tempSS.str());
+                    output.append(" ");
+                    tempSS.str("");
+
+                // Achou um define na tabela
+                } else if (defines.find(*token) != defines.end()) {
+
+                    // Escreve o valor do define
+                    tempSS << defines[*token];
                     output.append(tempSS.str());
                     output.append(" ");
                     tempSS.str("");
@@ -217,24 +221,48 @@ void compile () {
 
             if ("SPACE" == codeLine->second.front()) {
                 
-                if(codeLine->second.size() == 2) {
+                // Ve se eh um vetor
+                if (codeLine->second.size() == 2) {
                     int tempNum = (int)strtol((codeLine->second[1]).c_str(), NULL, 0);
 
-                    for(int i = 0; i < tempNum; ++i){
+                    // Reserva um endereco ate o tamanho do vetor
+                    for(int i = 0; i < tempNum; ++i)
                         output.append("0 ");
-                    }
 
-                } else{
+                // Se nao reserva so um endereco
+                } else {
                     output.append("0 ");    
                 }
                 
 
             } else if ("CONST" == codeLine->second.front()) {
+            
                 int tempNum = (int)strtol((codeLine->second[1]).c_str(), NULL, 0);
                 tempSS << tempNum;
                 output.append(tempSS.str());
                 output.append(" ");
                 tempSS.str("");
+            
+            } else if ("IF" == codeLine->second.front()) {
+
+                string argumentoIf;
+
+                // Achou um define na tabela
+                if (defines.find(codeLine->second[1]) != defines.end()) {
+                    argumentoIf = defines[codeLine->second[1]];
+                } else {
+                    argumentoIf = codeLine->second[1];
+                }
+
+                // Caso o argumento do IF seja 0,
+                // pula a proxima linha
+                cout << argumentoIf << endl;
+                if ("0" == argumentoIf){
+                    cout << "IF DEU FALSE" << endl;
+                    ++codeLine;
+                }else{
+                    cout << "IF DEU TRUE" << endl;
+                }
             }
 
         // Diretiva/Instrucao nao existe        
@@ -243,7 +271,7 @@ void compile () {
             errors.push("ERRO NA LINHA " + tempSS.str() + ": A Diretiva/Instrucao "+codeLine->second.front() + " nao existe.");
             tempSS.str("");
         }
-    } 
+    }
 }
  
 int main(int argc, char const *argv[]) {
@@ -258,10 +286,13 @@ int main(int argc, char const *argv[]) {
     getLabels();
     compile();
 
+    cout << "# LABELS #" << endl;
     for (Labels::iterator i = labels.begin(); i != labels.end(); ++i)
-    {
-        //cout << i->second << endl;
-    }
+        cout << i->first << ": " << i->second << endl;
+
+    cout << "# DEFINES #" << endl;
+    for (Defines::iterator i = defines.begin(); i != defines.end(); ++i)
+        cout << i->first << ": " << i->second << endl;
  
     // Sem erros de traducao
     // Escreve o arquivo de saida
