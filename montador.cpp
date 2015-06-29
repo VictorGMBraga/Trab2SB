@@ -13,21 +13,30 @@
  
 using namespace std;
  
-typedef int LineNumber;
-typedef vector<string> Tokens;
-typedef string Instruction;
-typedef string Directive;
-typedef int OperandsQty;
-typedef int OpCode;
-typedef int SizeInCode;
-typedef string Label;
-typedef int MemPos;
-typedef queue<string> Errors;
+typedef int             LineNumber;
+typedef vector<string>  Tokens;
+typedef string          Instruction;
+typedef string          Directive;
+typedef int             OperandsQty;
+typedef int             OpCode;
+typedef int             SizeInCode;
+typedef string          Label;
+typedef int             MemPos;
+typedef queue<string>   Errors;
  
 typedef map <LineNumber, Tokens>                                    CodeLines;
 typedef map <Instruction, tuple<OperandsQty, OpCode, SizeInCode> >  Instructions;
 typedef map <Directive, tuple<OperandsQty, SizeInCode> >            Directives;
 typedef map <Label, MemPos>                                         Labels;
+typedef map <Label, int>                                            Defines;
+
+Errors          errors;
+CodeLines       codeLines;
+Instructions    instructions;
+Directives      directives;
+Labels          labels;
+Defines         defines;
+string          output;
 
 bool strReplace(std::string& str, const std::string& from, const std::string& to) {
     size_t start_pos = str.find(from);
@@ -44,11 +53,10 @@ bool validToken (string token) {
 // Pre-Processamento:
 // Remove os comentarios e linhas em branco
 // E coloca o codigo numa estrutura do tipo CodeLines
-CodeLines readAndPreProcess (const char* fileName) {
+void readAndPreProcess (const char* fileName) {
  
     ifstream infile(fileName);
     string line;
-    CodeLines codeLines;
      
     // Le linha a linha
 	for (int lineCount = 1; getline(infile, line); ++lineCount) {
@@ -72,16 +80,12 @@ CodeLines readAndPreProcess (const char* fileName) {
             codeLines[lineCount].push_back(tempStr);
         }
     }
- 
-    return codeLines;
 }
 
 // Adiciona as instrucoes validas a estrutura do tipo Instructions
 // Cada instrucao possui: Qtd. Operandos, OpCode, Tamanho
-Instructions declareInstructions () {
+void declareInstructions () {
      
-    Instructions instructions;
- 
     instructions["ADD"]         = make_tuple(1,  1, 2);
     instructions["SUB"]         = make_tuple(1,  2, 2);
     instructions["MULT"]        = make_tuple(1,  3, 2);
@@ -96,48 +100,51 @@ Instructions declareInstructions () {
     instructions["INPUT"]       = make_tuple(1, 12, 2);
     instructions["OUTPUT"]      = make_tuple(1, 13, 2);
     instructions["STOP"]        = make_tuple(0, 14, 1);
- 
-    return instructions;
 }
 
 // Adiciona as diretivas validas a estrutura do tipo Directives
 // Cada diretiva possui: Qtd. Operandos, Tamanho
-Directives declareDirectives () {
-     
-    Directives directives;
- 
+void declareDirectives () {
+
     directives["SECTION"]   = make_tuple(1, 0);
     directives["SPACE"]     = make_tuple(1, 1);
     directives["CONST"]     = make_tuple(1, 1);
     directives["BEGIN"]     = make_tuple(0, 0);
     directives["END"]       = make_tuple(0, 0);
     directives["EQU"]       = make_tuple(1, 0);
-    directives["IF"]        = make_tuple(1, 0);
- 
-    return directives;
+    directives["IF"]        = make_tuple(1, 0); 
 }
 
 // Primeira Passagem:
 // Procura todos os labels e adiciona eles a estrutura do tipo Labels
 // com os elementos: Nome do Label, Posicao em Memoria
-Labels getLabels (CodeLines* codeLines, Instructions instructions, Directives directives) {
+void getLabels () {
  
-    Labels labels;
     int memPos = 0; // Posição da memória onde estará o token
  
-    for (CodeLines::iterator it = codeLines->begin(); it != codeLines->end(); ++it) {
+    for (CodeLines::iterator it = codeLines.begin(); it != codeLines.end(); ++it) {
  
         // Se achou ':' no fim do primeiro token da linha
         if (":" == it->second.front().substr(it->second.front().length() - 1, 1)) {
  
+            //cout << it->second.front() << endl;
+
             // Tira o ':'
             string tempLabel = it->second.front().substr(0, it->second.front().length() - 1);
- 
+            
+            
+
+                
+            //if("EQU" == it->second.begin() + 1){
+                //defines[it->second.begin()] = it->second.begin() + 2;
+            //}
+            //else{
+                // Adiciona na tabela de Labels
+                labels[tempLabel] = memPos;
+            //}
+
             // Apaga o Label do código
             it->second.erase(it->second.begin());
-
-            // Adiciona na tabela de Labels
-            labels[tempLabel] = memPos;
         }
  
         // Incrementa o contador de posição de memória
@@ -146,16 +153,14 @@ Labels getLabels (CodeLines* codeLines, Instructions instructions, Directives di
             memPos += get<2>(instructions[it->second.front()]);
         else if (directives.find(it->second.front()) != directives.end())
             memPos += get<1>(directives[it->second.front()]);
-    }
- 
-    return labels;
+    } 
 }
 
 // Segunda Passagem:
 // Compilacao em si. Gera o codigo objeto.
-string compile (CodeLines codeLines, Instructions instructions, Directives directives, Labels labels, Errors* errors) {
+void compile () {
  
-    string output;
+    //string output;
     stringstream tempSS;
 
     int memPos = 0;
@@ -177,7 +182,7 @@ string compile (CodeLines codeLines, Instructions instructions, Directives direc
             // O numero de operandos esta incorreto
             if (codeLine->second.size() - 1 != get<0>(instructions[codeLine->second.front()])){
                 tempSS << codeLine->first;
-                errors->push("ERRO SINTATICO NA LINHA " + tempSS.str() + ": O Numero de operandos da instrucao "+codeLine->second.front() + " esta incorreto.");
+                errors.push("ERRO SINTATICO NA LINHA " + tempSS.str() + ": O Numero de operandos da instrucao "+codeLine->second.front() + " esta incorreto.");
                 tempSS.str("");
                 continue;
             }
@@ -201,7 +206,7 @@ string compile (CodeLines codeLines, Instructions instructions, Directives direc
                 // Label Inexistente
                 } else {
                     tempSS << codeLine->first;
-                    errors->push("ERRO NA LINHA " + tempSS.str() + ": O Label "+ *token + " nao existe.");
+                    errors.push("ERRO NA LINHA " + tempSS.str() + ": O Label "+ *token + " nao existe.");
                 }
             }
  
@@ -235,12 +240,10 @@ string compile (CodeLines codeLines, Instructions instructions, Directives direc
         // Diretiva/Instrucao nao existe        
         } else {
             tempSS << codeLine->first;
-            errors->push("ERRO NA LINHA " + tempSS.str() + ": A Diretiva/Instrucao "+codeLine->second.front() + " nao existe.");
+            errors.push("ERRO NA LINHA " + tempSS.str() + ": A Diretiva/Instrucao "+codeLine->second.front() + " nao existe.");
             tempSS.str("");
         }
-    }
- 
-    return output;
+    } 
 }
  
 int main(int argc, char const *argv[]) {
@@ -248,25 +251,24 @@ int main(int argc, char const *argv[]) {
     char *file1 = (char*) malloc(sizeof(char)*strlen(argv[1]) + 1);
     strcpy(file1, argv[1]);
     strcat(file1, ".asm");
-    
-    Errors errors;
-    
-    CodeLines codeLines         = readAndPreProcess(file1);
-    Instructions instructions   = declareInstructions();
-    Directives directives       = declareDirectives();
-    Labels labels               = getLabels(&codeLines, instructions, directives);
-    string code                 = compile(codeLines, instructions, directives, labels, &errors);
+        
+    readAndPreProcess(file1);
+    declareInstructions();
+    declareDirectives();
+    getLabels();
+    compile();
+
+    for (Labels::iterator i = labels.begin(); i != labels.end(); ++i)
+    {
+        //cout << i->second << endl;
+    }
  
     // Sem erros de traducao
     // Escreve o arquivo de saida
     if (errors.empty()) {
 
-        string output;
-
-        output.append(code);
-
-        char *file2 = (char*) malloc(sizeof(char)*strlen(argv[2]) + 1);
-        strcpy(file2, argv[2]);
+        char *file2 = (char*) malloc(sizeof(char)*strlen(argv[1]) + 1);
+        strcpy(file2, argv[1]);
         strcat(file2, ".o");
         ofstream outputFile;
         outputFile.open(file2);
