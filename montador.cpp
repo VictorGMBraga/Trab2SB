@@ -109,10 +109,10 @@ Directives declareDirectives () {
     directives["SECTION"]   = make_tuple(1, 0);
     directives["SPACE"]     = make_tuple(1, 1);
     directives["CONST"]     = make_tuple(1, 1);
-    directives["PUBLIC"]    = make_tuple(0, 0);
-    directives["EXTERN"]    = make_tuple(0, 0);
     directives["BEGIN"]     = make_tuple(0, 0);
     directives["END"]       = make_tuple(0, 0);
+    directives["EQU"]       = make_tuple(1, 0);
+    directives["IF"]        = make_tuple(1, 0);
  
     return directives;
 }
@@ -201,7 +201,7 @@ string compile (CodeLines codeLines, Instructions instructions, Directives direc
                 // Label Inexistente
                 } else {
                     tempSS << codeLine->first;
-                    errors->push("ERRO SEMANTICO NA LINHA " + tempSS.str() + ": O Label "+ *token + " nao existe.");
+                    errors->push("ERRO NA LINHA " + tempSS.str() + ": O Label "+ *token + " nao existe.");
                 }
             }
  
@@ -235,7 +235,7 @@ string compile (CodeLines codeLines, Instructions instructions, Directives direc
         // Diretiva/Instrucao nao existe        
         } else {
             tempSS << codeLine->first;
-            errors->push("ERRO SINTATICO NA LINHA " + tempSS.str() + ": A Diretiva/Instrucao "+codeLine->second.front() + " nao existe.");
+            errors->push("ERRO NA LINHA " + tempSS.str() + ": A Diretiva/Instrucao "+codeLine->second.front() + " nao existe.");
             tempSS.str("");
         }
     }
@@ -257,6 +257,8 @@ int main(int argc, char const *argv[]) {
     Labels labels               = getLabels(&codeLines, instructions, directives);
     string code                 = compile(codeLines, instructions, directives, labels, &errors);
  
+    // Sem erros de traducao
+    // Escreve o arquivo de saida
     if (errors.empty()) {
 
         string output;
@@ -271,6 +273,8 @@ int main(int argc, char const *argv[]) {
         outputFile << output;
         outputFile.close();
 
+    // Ocorreram erros
+    // Mostra e nao gera saida
     } else {
 
         while (!errors.empty()) {
