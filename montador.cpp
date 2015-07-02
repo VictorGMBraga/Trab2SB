@@ -46,42 +46,6 @@ bool strReplace(std::string& str, const std::string& from, const std::string& to
     return true;
 }
 
-bool validToken (string token) {
-    return regex_match(token.c_str(), regex("[A-Za-z0-9_]+", regex_constants::basic));
-}
-
-// Pre-Processamento:
-// Remove os comentarios e linhas em branco
-// E coloca o codigo numa estrutura do tipo CodeLines
-void readAndPreProcess (const char* fileName) {
- 
-    ifstream infile(fileName);
-    string line;
-     
-    // Le linha a linha
-	for (int lineCount = 1; getline(infile, line); ++lineCount) {
-        strReplace(line, ",", " ");
-
-        // Ignora linhas em branco
-        if (line.empty()) continue;
- 
-        istringstream iss(line);
-         
-        string tempStr;
-         
-        while (iss >> tempStr) {
-            // Ignora comentarios
-            if (";" == tempStr.substr(0,1)) break;
- 
-            // Desconsidera o caso (maiusculas/minusculas)
-            transform(tempStr.begin(), tempStr.end(), tempStr.begin(), ::toupper);          
-             
-            // Adiciona os tokens ao vetor
-            codeLines[lineCount].push_back(tempStr);
-        }
-    }
-}
-
 // Adiciona as instrucoes validas a estrutura do tipo Instructions
 // Cada instrucao possui: Qtd. Operandos, OpCode, Tamanho
 void declareInstructions () {
@@ -115,44 +79,95 @@ void declareDirectives () {
     directives["IF"]        = make_tuple(1, 0); 
 }
 
-// Primeira Passagem:
-// Procura todos os labels e adiciona eles a estrutura do tipo Labels
-// com os elementos: Nome do Label, Posicao em Memoria
-void getLabels () {
+// Pre-Processamento:
+// Remove os comentarios e linhas em branco
+// E coloca o codigo numa estrutura do tipo CodeLines
+// Tambem verifica os labels e equs e ifs
+void readAndPreProcess (const char* fileName) {
  
-    int memPos = 0; // Posição da memória onde estará o token
- 
-    for (CodeLines::iterator it = codeLines.begin(); it != codeLines.end(); ++it) {
- 
-        // Se achou ':' no fim do primeiro token da linha
-        if (":" == it->second.front().substr(it->second.front().length() - 1, 1)) {
- 
-            // Tira o ':'
-            string tempLabel = it->second.front().substr(0, it->second.front().length() - 1);
+    ifstream infile(fileName);
+    string line;
+    int memPos = 0;
+     
+    // Le linha a linha
+	for (int lineCount = 1; getline(infile, line); ++lineCount) {
 
-            // Caso seja um EQU
-            // Adiciona na tabela de defines    
-            if ("EQU" == it->second[1]) {
-                defines[tempLabel] = it->second[2];
-            // Senao adiciona na tabela de Labels
+        // Troca virgulas por espaco
+        strReplace(line, ",", " ");
+
+        // Ignora linhas em branco
+        if (line.empty()) continue;
+ 
+        istringstream iss(line);
+        string tempStr;
+
+        // Pega palavra a palavra de acordo com os espacos 
+        while (iss >> tempStr) {
+            
+            // Ignora comentarios
+            if (";" == tempStr.substr(0,1)) break;
+ 
+            // Desconsidera o caso (maiusculas/minusculas)
+            transform(tempStr.begin(), tempStr.end(), tempStr.begin(), ::toupper);
+
+            // Ve se eh um label
+            if (":" == tempStr.substr(tempStr.length() - 1, 1)) {
+
+                // Remove o ':'
+                tempStr = tempStr.substr(0, tempStr.length() - 1);
+
+                string tempStr2;
+                iss >> tempStr2;
+
+                // Ve se o proximo token eh EQU
+                if ("EQU" == tempStr2) {
+
+                    string tempStr3;
+                    iss >> tempStr3;
+
+                    // Coloca o valor do EQU na tabela de defines
+                    defines[tempStr] = tempStr3;
+
+                // Senao eh label
+                } else {
+
+                    // Coloca o label na tabela de labels 
+                    labels[tempStr] = memPos;
+
+                    // Adiciona o proximo token ao vetor
+                    codeLines[lineCount].push_back(tempStr2);
+                }
+
+                // Incrementa o contador da posicao de memoria
+                // de acordo com o tamanho da instrucao/diretiva
+                if (instructions.find(tempStr2) != instructions.end())
+                    memPos += get<2>(instructions[tempStr2]);
+                else if (directives.find(tempStr2) != directives.end())
+                    memPos += get<1>(directives[tempStr2]);
+
+            // Achou um define pro token
+            } else if (defines.find(tempStr) != defines.end()) {
+
+                // Adiciona o valor do define ao vetor
+                codeLines[lineCount].push_back(defines[tempStr]);
+
             } else {
-                labels[tempLabel] = memPos;
-            }
 
-            // Apaga o Label do código
-            it->second.erase(it->second.begin());
+                // Adiciona os tokens ao vetor
+                codeLines[lineCount].push_back(tempStr);
+
+                // Incrementa o contador da posicao de memoria
+                // de acordo com o tamanho da instrucao/diretiva
+                if (instructions.find(tempStr) != instructions.end()) {
+                    memPos += get<2>(instructions[tempStr]);
+                } else if (directives.find(tempStr) != directives.end()) {
+                    memPos += get<1>(directives[tempStr]);
+                }
+            }
         }
- 
-        // Incrementa o contador de posição de memória
-        // de acordo com a instrucao/diretiva usada
-        if (instructions.find(it->second.front()) != instructions.end())
-            memPos += get<2>(instructions[it->second.front()]);
-        else if (directives.find(it->second.front()) != directives.end())
-            memPos += get<1>(directives[it->second.front()]);
-    } 
+    }
 }
 
-// Segunda Passagem:
 // Compilacao em si. Gera o codigo objeto.
 void compile () {
  
@@ -184,10 +199,6 @@ void compile () {
  
             // Procura os argumentos da instrucao na tabela de labels
             for (Tokens::iterator token = codeLine->second.begin() + 1; token != codeLine->second.end(); ++token) {
-         
-
-                //*token = token->substr(0,token->find("+"));
-
 
                 // Achou um label na tabela
                 if (labels.find(*token) != labels.end()) {
@@ -245,23 +256,15 @@ void compile () {
             
             } else if ("IF" == codeLine->second.front()) {
 
-                string argumentoIf;
+                if ("0" == codeLine->second[1]) {
 
-                // Achou um define na tabela
-                if (defines.find(codeLine->second[1]) != defines.end()) {
-                    argumentoIf = defines[codeLine->second[1]];
-                } else {
-                    argumentoIf = codeLine->second[1];
-                }
-
-                // Caso o argumento do IF seja 0,
-                // pula a proxima linha
-                cout << argumentoIf << endl;
-                if ("0" == argumentoIf){
-                    cout << "IF DEU FALSE" << endl;
+                    cout << endl << "IF DEU FALSE" << endl;
                     ++codeLine;
-                }else{
-                    cout << "IF DEU TRUE" << endl;
+
+                } else {
+
+                    cout << endl << "IF DEU TRUE" << endl;
+
                 }
             }
 
@@ -279,21 +282,31 @@ int main(int argc, char const *argv[]) {
     char *file1 = (char*) malloc(sizeof(char)*strlen(argv[1]) + 1);
     strcpy(file1, argv[1]);
     strcat(file1, ".asm");
-        
-    readAndPreProcess(file1);
+    
     declareInstructions();
     declareDirectives();
-    getLabels();
+    readAndPreProcess(file1);
+    
+    cout << endl << "# LABELS #" << endl;
+    for (Labels::iterator i = labels.begin(); i != labels.end(); ++i) {
+        cout << i->first << ": " << i->second << endl;
+    }
+
+    cout << endl << "# DEFINES #" << endl;
+    for (Defines::iterator i = defines.begin(); i != defines.end(); ++i) {
+        cout << i->first << ": " << i->second << endl;
+    }
+
+    cout << endl << "# CODIGO PRE PROCESSADO #" << endl;
+    for (CodeLines::iterator i = codeLines.begin(); i != codeLines.end(); ++i) {
+        for (Tokens::iterator j = i->second.begin(); j != i->second.end(); ++j) {
+            cout << *j << " ";
+        }
+        cout << endl;
+    }
+
     compile();
 
-    cout << "# LABELS #" << endl;
-    for (Labels::iterator i = labels.begin(); i != labels.end(); ++i)
-        cout << i->first << ": " << i->second << endl;
-
-    cout << "# DEFINES #" << endl;
-    for (Defines::iterator i = defines.begin(); i != defines.end(); ++i)
-        cout << i->first << ": " << i->second << endl;
- 
     // Sem erros de traducao
     // Escreve o arquivo de saida
     if (errors.empty()) {
