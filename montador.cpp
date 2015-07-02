@@ -30,6 +30,8 @@ typedef map <Directive, tuple<OperandsQty, SizeInCode> >            Directives;
 typedef map <Label, MemPos>                                         Labels;
 typedef map <Label, string>                                         Defines;
 
+enum CodeSection { NONE, TEXT, DATA };
+
 Errors          errors;
 CodeLines       codeLines;
 Instructions    instructions;
@@ -171,8 +173,9 @@ void readAndPreProcess (const char* fileName) {
 // Compilacao em si. Gera o codigo objeto.
 void compile () {
  
+    bool achouSectionText = false;
+    CodeSection codeSection = NONE;
     stringstream tempSS;
-
     int memPos = 0;
  
     // Le o codigo linha a linha
@@ -180,6 +183,12 @@ void compile () {
          
         // Achou uma instrucao
         if (instructions.find(codeLine->second.front()) != instructions.end()) {
+
+            if (TEXT != codeSection) {
+                tempSS << codeLine->first;
+                errors.push("ERRO NA LINHA " + tempSS.str() + ": A instrucao esta na secao errada.");
+                tempSS.str("");
+            }
  
             // Escreve o OpCode da instrução
             tempSS << get<1>(instructions[codeLine->second.front()]);
@@ -222,15 +231,30 @@ void compile () {
                 } else {
                     tempSS << codeLine->first;
                     errors.push("ERRO NA LINHA " + tempSS.str() + ": O Label "+ *token + " nao existe.");
+                    tempSS.str("");
                 }
             }
  
         // Achou uma Diretiva
         } else if (directives.find(codeLine->second.front()) != directives.end()) {
             
+            // Adiciona o tamanho da diretiva ao contador de posicao de memoria
             memPos += get<1>(directives[codeLine->second.front()]);
 
-            if ("SPACE" == codeLine->second.front()) {
+            if ("SECTION" == codeLine->second.front()) {
+
+                if ("TEXT" == codeLine->second[1]) {
+                    codeSection = TEXT;
+                    achouSectionText = true;
+                } else if ("DATA" == codeLine->second[1]) {
+                    codeSection = DATA;
+                } else {
+                    tempSS << codeLine->first;
+                    errors.push("ERRO NA LINHA " + tempSS.str() + ": O argumento "+ codeLine->second[1] + " eh invalido.");
+                    tempSS.str("");
+                }
+
+            } else if ("SPACE" == codeLine->second.front()) {
                 
                 // Ve se eh um vetor
                 if (codeLine->second.size() == 2) {
@@ -275,6 +299,11 @@ void compile () {
             tempSS.str("");
         }
     }
+
+    if (!achouSectionText) {
+        errors.push("ERRO: A SECTION TEXT nao foi declarada.");
+    }
+
 }
  
 int main(int argc, char const *argv[]) {
