@@ -42,6 +42,9 @@ Defines         defines;
 string          outputText, outputData, outputBSS;
 string          codOutputText, codOutputData, codOutputBSS;
 
+const int textStartAddress = 0x08048080;
+int dataStartAddress;
+
 bool achouInput = false;
 bool achouOutput = false;
 
@@ -57,20 +60,20 @@ bool strReplace(std::string& str, const std::string& from, const std::string& to
 // Cada instrucao possui: Qtd. Operandos, Instrucao IA-32, OpCode IA-32, Tamanho
 void declareInstructions () {
 
-    instructions["ADD"]         = make_tuple(1, "\n\tadd eax, <ARG1>",                              "03 00 00",                             3);
-    instructions["SUB"]         = make_tuple(1, "\n\tsub eax, <ARG1>",                              "2B 00 00",                             3);
-    instructions["MULT"]        = make_tuple(1, "\n\timul eax, <ARG1>",                             "AF 00 00",                             3);
-    instructions["DIV"]         = make_tuple(1, "\n\tmov ebx, [<ARG1>]\n\tidiv ebx",                "BB 1E 00 00",                          4); // arrumar tamanho, falta coisa
-    instructions["JMP"]         = make_tuple(1, "\n\tjmp <ARG1>",                                   "FF 26",                                2);
-    instructions["JMPN"]        = make_tuple(1, "\n\tcmp eax, 0\n\tjl <ARG1>",                      "3D 00 7C 06",                          4);
-    instructions["JMPP"]        = make_tuple(1, "\n\tcmp eax, 0\n\tjg <ARG1>",                      "3D 00 7F 00",                          4);
-    instructions["JMPZ"]        = make_tuple(1, "\n\tcmp eax, 0\n\tje <ARG1>",                      "3D 00 74 00",                          4);
-    instructions["COPY"]        = make_tuple(2, "\n\tmov eax, [<ARG1>]\n\tmov [<ARG2>], eax",       "B8 06 89 C6",                          4);
-    instructions["LOAD"]        = make_tuple(1, "\n\tmov eax, <ARG1>",                              "B8 06",                                2);
-    instructions["STORE"]       = make_tuple(1, "\n\tmov [<ARG1>], eax",                            "89 C6",                                2);
+    instructions["ADD"]         = make_tuple(1, "\n\tadd eax, [<ARG1>]",                            "03 05 <ADDR1>",                           6);
+    instructions["SUB"]         = make_tuple(1, "\n\tsub eax, [<ARG1>]",                            "2B 05 <ADDR1>",                           6);
+    instructions["MULT"]        = make_tuple(1, "\n\timul eax, [<ARG1>]",                           "0F AF <ADDR1>",                        7);
+    instructions["DIV"]         = make_tuple(1, "\n\tmov ebx, [<ARG1>]\n\tidiv ebx",                "8B 1D <ADDR1>\nF7 FB",                  8);
+    instructions["JMP"]         = make_tuple(1, "\n\tjmp <ARG1>",                                   "EB <RELADDR>",                         2);
+    instructions["JMPN"]        = make_tuple(1, "\n\tcmp eax, 0\n\tjl <ARG1>",                      "83 F8 00\n7C <RELADDR>",                5);
+    instructions["JMPP"]        = make_tuple(1, "\n\tcmp eax, 0\n\tjg <ARG1>",                      "83 F8 00\n7F <RELADDR>",                5);
+    instructions["JMPZ"]        = make_tuple(1, "\n\tcmp eax, 0\n\tje <ARG1>",                      "83 F8 00\n74 <RELADDR>",                5);
+    instructions["COPY"]        = make_tuple(2, "\n\tmov eax, [<ARG1>]\n\tmov [<ARG2>], eax",       "A1 <ADDR1>\nA3 <ADDR2>",               10);
+    instructions["LOAD"]        = make_tuple(1, "\n\tmov eax, [<ARG1>]",                            "A1 <ADDR1>",                           5);
+    instructions["STORE"]       = make_tuple(1, "\n\tmov [<ARG1>], eax",                            "A3 <ADDR1>",                           5);
     instructions["INPUT"]       = make_tuple(1, "\n\tcall LerInteiro\n\tmov DWORD [<ARG1>], eax",   " ",                                    2); // ver
-    instructions["OUTPUT"]      = make_tuple(1, "\n\tmov eax, [<ARG1>]\n\tcall EscreverInteiro",    "B8 06",                                2); // ver, falta coisa
-    instructions["STOP"]        = make_tuple(0, "\n\tmov eax, 1\n\tmov ebx, 0\n\tint 80h",          "B8 01 00 00 00 BB 00 00 00 00 CD 80", 10);
+    instructions["OUTPUT"]      = make_tuple(1, "\n\tmov eax, [<ARG1>]\n\tcall EscreverInteiro",    "B8 06",                                2); // ver
+    instructions["STOP"]        = make_tuple(0, "\n\tmov eax, 1\n\tmov ebx, 0\n\tint 80h",          "B8 01 00 00 00\nBB 00 00 00 00\nCD 80", 12);
 
 }
 
@@ -79,8 +82,8 @@ void declareInstructions () {
 void declareDirectives () {
 
     directives["SECTION"]   = make_tuple(1, 1, 0);
-    directives["SPACE"]     = make_tuple(0, 1, 1);
-    directives["CONST"]     = make_tuple(1, 1, 1);
+    directives["SPACE"]     = make_tuple(0, 1, 4);
+    directives["CONST"]     = make_tuple(1, 1, 4);
     directives["BEGIN"]     = make_tuple(0, 1, 0);
     directives["END"]       = make_tuple(0, 0, 0);
     directives["EQU"]       = make_tuple(1, 1, 0);
@@ -96,6 +99,9 @@ void readAndPreProcess (const char* fileName) {
 
     ifstream infile(fileName);
     string line;
+    int textMemAddr = textStartAddress;
+    int dataMemAddr = 0;
+    int BSSMemAddr = 0;
 
     // Le linha a linha
 	for (int lineCount = 1; getline(infile, line); ++lineCount) {
@@ -148,7 +154,13 @@ void readAndPreProcess (const char* fileName) {
                     } else {
 
                         // Adiciona na tabela de labels
-                        labels[tempStr] = 0;
+                        labels[tempStr] = textMemAddr;
+
+                        // Adiciona endereco de memoria
+                        if (instructions.find(tempStr2) != instructions.end())
+                            textMemAddr += get<3>(instructions[tempStr2]);
+                        //else if ("CONST" == tempStr2)
+                            //dataMemAddr += 4;
 
                         // Adiciona os tokens ao vetor
                         codeLines[lineCount].push_back(tempStr+":");
@@ -161,7 +173,7 @@ void readAndPreProcess (const char* fileName) {
                 } else {
 
                     // Adiciona na tabela de labels
-                    labels[tempStr] = 0;
+                    labels[tempStr] = textMemAddr;
 
                     codeLines[lineCount].push_back(tempStr+":");
                 
@@ -181,9 +193,17 @@ void readAndPreProcess (const char* fileName) {
 
             }
 
+            // Adiciona endereco de memoria
+            if (instructions.find(tempStr) != instructions.end())
+                textMemAddr += get<3>(instructions[tempStr]);
+            //else if ("CONST" == tempStr)
+                //dataMemAddr += 4;
+
         } // END WHILE que pega palavra a palavra de acordo com os espacos
 
     } // END FOR que le linha a linha
+
+    dataStartAddress = textMemAddr;
 
 }
 
@@ -195,7 +215,6 @@ void compile () {
     stringstream tempSS;
     int memPos = 0;
     
-
     // Le o codigo linha a linha
     for (CodeLines::iterator codeLine = codeLines.begin(); codeLine != codeLines.end(); ++codeLine) {
 
@@ -229,6 +248,7 @@ void compile () {
 
             if ("STOP" == codeLine->second.front()) {
                 outputText.append(get<1>(instructions[codeLine->second.front()]));
+                codOutputText.append(get<2>(instructions[codeLine->second.front()]));
             }
 
             // Procura os argumentos da instrucao na tabela de labels
@@ -239,19 +259,32 @@ void compile () {
                     
                     string auxStr = get<1>(instructions[codeLine->second.front()]);
                     strReplace(auxStr, "<ARG1>", *token);
-                    
+
+                    string auxStr2 = get<2>(instructions[codeLine->second.front()]);
+                    tempSS << hex << labels[*token] + dataStartAddress;
+                    strReplace(auxStr2, "<ADDR1>", tempSS.str());
+                    tempSS.str("");
 
                     if ("COPY" == codeLine->second.front()) {
+                        
                         ++token;
                         strReplace(auxStr, "<ARG2>", *token);
                         cout << auxStr;
                         outputText.append(auxStr);
+                        
+                        tempSS << hex << labels[*token] + dataStartAddress;
+                        strReplace(auxStr2, "<ADDR2>", tempSS.str());
+                        tempSS.str("");
+                        codOutputText.append(auxStr2+" \n");
+
                         break;
 
                     } else {
 
                         cout << auxStr;
                         outputText.append(auxStr);
+
+                        codOutputText.append(auxStr2+" \n");
 
                     }
 
@@ -363,7 +396,7 @@ int main(int argc, char const *argv[]) {
 
     cout << endl << "# LABELS #" << endl;
     for (Labels::iterator i = labels.begin(); i != labels.end(); ++i) {
-        cout << i->first << ": " << i->second << endl;
+        cout << i->first << ": " << hex << i->second << endl;
     }
 
     cout << endl << "# DEFINES #" << endl;
@@ -401,9 +434,17 @@ int main(int argc, char const *argv[]) {
         outputFile << outputData << "\n";
         outputFile << "section .bss \n";
         outputFile << outputBSS << "\n";
-
-
         outputFile.close();
+
+        char *file3 = (char*) malloc(sizeof(char)*strlen(argv[1]) + 1);
+        strcpy(file3, argv[1]);
+        strcat(file3, ".cod");
+        ofstream outputFile2;
+        outputFile2.open(file3);
+        outputFile2 << codOutputText;
+        outputFile2 << codOutputData;
+        outputFile2 << codOutputBSS;
+        outputFile2.close();
 
         /*abrir o .cod no modo r e no modo w
 
