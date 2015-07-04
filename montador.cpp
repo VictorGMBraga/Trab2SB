@@ -25,11 +25,11 @@ typedef string          Label;
 typedef int             MemPos;
 typedef queue<string>   Errors;
 
-typedef map <LineNumber, Tokens>                                    CodeLines;
-typedef map <Instruction, tuple<OperandsQty, OpCode, CodMaquina, SizeInCode> >  Instructions;
-typedef map <Directive, tuple<OperandsQty, OpCode,SizeInCode > >            Directives;
-typedef map <Label, MemPos>                                         Labels;
-typedef map <Label, string>                                         Defines;
+typedef map < LineNumber, Tokens >                                                  CodeLines;
+typedef map < Instruction, tuple<OperandsQty, OpCode, CodMaquina, SizeInCode> >     Instructions;
+typedef map < Directive, tuple<OperandsQty, OperandsQty, SizeInCode > >             Directives;
+typedef map < Label, MemPos >                                                       Labels;
+typedef map < Label, string >                                                       Defines;
 
 enum CodeSection { NONE, TEXT, DATA };
 
@@ -39,7 +39,7 @@ Instructions    instructions;
 Directives      directives;
 Labels          labels;
 Defines         defines;
-string          outputText, outputData, outputBSS; //TRANSFORMAR EM UM VETOR DE CHAR
+string          outputText, outputData, outputBSS;
 string          codOutputText, codOutputData, codOutputBSS;
 
 bool achouInput = false;
@@ -54,36 +54,38 @@ bool strReplace(std::string& str, const std::string& from, const std::string& to
 }
 
 // Adiciona as instrucoes validas a estrutura do tipo Instructions
-// Cada instrucao possui: Qtd. Operandos, OpCode, Tamanho
+// Cada instrucao possui: Qtd. Operandos, Instrucao IA-32, OpCode IA-32, Tamanho
 void declareInstructions () {
 
-    instructions["ADD"]         = make_tuple(1,  "\n\tadd eax, <ARG1>", "03 00 00", 3);
-    instructions["SUB"]         = make_tuple(1,  "\n\tsub eax, <ARG1>", "2B 00 00", 3);
-    instructions["MULT"]        = make_tuple(1,  "\n\timul eax, <ARG1>", "AF 00 00", 3);
-    instructions["DIV"]         = make_tuple(1,  "\n\tmov ebx, [<ARG1>]\n\tidiv ebx", "BB 1E 00 00", 4); // arrumar tamanho, falta coisa
-    instructions["JMP"]         = make_tuple(1,  "\n\tjmp <ARG1>", "FF 26", 2);
-    instructions["JMPN"]        = make_tuple(1,  "\n\tcmp eax, 0\n\tjl <ARG1>", "3D 00 7C 06", 4);
-    instructions["JMPP"]        = make_tuple(1,  "\n\tcmp eax, 0\n\tjg <ARG1>", "3D 00 7F 00", 4);
-    instructions["JMPZ"]        = make_tuple(1,  "\n\tcmp eax, 0\n\tje <ARG1>", "3D 00 74 00", 4);
-    instructions["COPY"]        = make_tuple(2,  "\n\tmov eax, [<ARG1>]\n\tmov [<ARG2>], eax", "B8 06 89 C6", 4);
-    instructions["LOAD"]        = make_tuple(1, "\n\tmov eax, <ARG1>", "B8 06", 2);
-    instructions["STORE"]       = make_tuple(1, "\n\tmov [<ARG1>], eax", "89 C6", 2);
-    instructions["INPUT"]       = make_tuple(1, "\n\tcall LerInteiro\n\tmov DWORD [<ARG1>], eax", "", 2); // ver
-    instructions["OUTPUT"]      = make_tuple(1, "\n\tmov eax, [<ARG1>]\n\tcall EscreverInteiro", "B8 06", 2); // ver, falta coisa
-    instructions["STOP"]        = make_tuple(0, "\n\tmov eax, 1\n\tmov ebx, 0\n\tint 80h", "B8 01 00 00 00 BB 00 00 00 00 CD 80", 10);
+    instructions["ADD"]         = make_tuple(1, "\n\tadd eax, <ARG1>",                              "03 00 00",                             3);
+    instructions["SUB"]         = make_tuple(1, "\n\tsub eax, <ARG1>",                              "2B 00 00",                             3);
+    instructions["MULT"]        = make_tuple(1, "\n\timul eax, <ARG1>",                             "AF 00 00",                             3);
+    instructions["DIV"]         = make_tuple(1, "\n\tmov ebx, [<ARG1>]\n\tidiv ebx",                "BB 1E 00 00",                          4); // arrumar tamanho, falta coisa
+    instructions["JMP"]         = make_tuple(1, "\n\tjmp <ARG1>",                                   "FF 26",                                2);
+    instructions["JMPN"]        = make_tuple(1, "\n\tcmp eax, 0\n\tjl <ARG1>",                      "3D 00 7C 06",                          4);
+    instructions["JMPP"]        = make_tuple(1, "\n\tcmp eax, 0\n\tjg <ARG1>",                      "3D 00 7F 00",                          4);
+    instructions["JMPZ"]        = make_tuple(1, "\n\tcmp eax, 0\n\tje <ARG1>",                      "3D 00 74 00",                          4);
+    instructions["COPY"]        = make_tuple(2, "\n\tmov eax, [<ARG1>]\n\tmov [<ARG2>], eax",       "B8 06 89 C6",                          4);
+    instructions["LOAD"]        = make_tuple(1, "\n\tmov eax, <ARG1>",                              "B8 06",                                2);
+    instructions["STORE"]       = make_tuple(1, "\n\tmov [<ARG1>], eax",                            "89 C6",                                2);
+    instructions["INPUT"]       = make_tuple(1, "\n\tcall LerInteiro\n\tmov DWORD [<ARG1>], eax",   " ",                                    2); // ver
+    instructions["OUTPUT"]      = make_tuple(1, "\n\tmov eax, [<ARG1>]\n\tcall EscreverInteiro",    "B8 06",                                2); // ver, falta coisa
+    instructions["STOP"]        = make_tuple(0, "\n\tmov eax, 1\n\tmov ebx, 0\n\tint 80h",          "B8 01 00 00 00 BB 00 00 00 00 CD 80", 10);
+
 }
 
 // Adiciona as diretivas validas a estrutura do tipo Directives
-// Cada diretiva possui: Qtd. Operandos, Tamanho
+// Cada diretiva possui: Min. Operandos, Max. Operandos, Tamanho
 void declareDirectives () {
-    // que que eu faço nessa porra?
-    directives["SECTION"]   = make_tuple(1,"Section", 0);
-    directives["SPACE"]     = make_tuple(1, "resd", 1);
-    directives["CONST"]     = make_tuple(1, "dd", 1);
-    directives["BEGIN"]     = make_tuple(0,"_start:", 0);
-    directives["END"]       = make_tuple(0,"", 0);//??????????????
-    directives["EQU"]       = make_tuple(1, "",0);//?????????????
-    directives["IF"]        = make_tuple(1, "",0);//???????????w
+
+    directives["SECTION"]   = make_tuple(1, 1, 0);
+    directives["SPACE"]     = make_tuple(0, 1, 1);
+    directives["CONST"]     = make_tuple(1, 1, 1);
+    directives["BEGIN"]     = make_tuple(0, 1, 0);
+    directives["END"]       = make_tuple(0, 0, 0);
+    directives["EQU"]       = make_tuple(1, 1, 0);
+    directives["IF"]        = make_tuple(1, 1, 0);
+
 }
 
 // Pre-Processamento:
@@ -104,10 +106,9 @@ void readAndPreProcess (const char* fileName) {
         // Ignora linhas em branco
         if (line.empty()) continue;
 
+        // Pega palavra a palavra de acordo com os espacos
         istringstream iss(line);
         string tempStr;
-
-        // Pega palavra a palavra de acordo com os espacos
         while (iss >> tempStr) {
 
             // Ignora comentarios
@@ -115,51 +116,75 @@ void readAndPreProcess (const char* fileName) {
 
             // Desconsidera o caso (maiusculas/minusculas)
             transform(tempStr.begin(), tempStr.end(), tempStr.begin(), ::toupper);
-//=================================================================================
-            // Ve se eh um label
+
+            // Ve se eh um label / define
             if (":" == tempStr.substr(tempStr.length() - 1, 1)) {
-                    //verifica se ja está na tabela
-                    /*if
-                    errors.push("ERRO NA LINHA " + tempSS.str() + ": Rotulo ja declarado");
-                    tempSS.str("");*/
+                
+                //verifica se ja está na tabela
+                /*if
+                errors.push("ERRO NA LINHA " + tempSS.str() + ": Rotulo ja declarado");
+                tempSS.str("");*/
 
-                string tempStr2;
-                iss >> tempStr2;
-
-                // Ve se o proximo token eh EQU
-                if ("EQU" == tempStr2) {
+                // Ve se ainda restam tokens na linha
+                if (iss.rdbuf()->in_avail() != 0) {
 
                     // Remove o ':'
                     tempStr = tempStr.substr(0, tempStr.length() - 1);
 
-                    string tempStr3;
-                    iss >> tempStr3;
+                    string tempStr2;
+                    iss >> tempStr2;
 
-                    // Coloca o valor do EQU na tabela de defines
-                    defines[tempStr] = tempStr3;
+                    // Ve se o proximo token eh EQU
+                    if ("EQU" == tempStr2) {
 
+                        string tempStr3;
+                        iss >> tempStr3;
+
+                        // Coloca o valor do EQU na tabela de defines
+                        defines[tempStr] = tempStr3;
+
+                    // Se nao eh so um label
+                    // Com algo a mais na mesma linha
+                    } else {
+
+                        // Adiciona na tabela de labels
+                        labels[tempStr] = 0;
+
+                        // Adiciona os tokens ao vetor
+                        codeLines[lineCount].push_back(tempStr+":");
+                        codeLines[lineCount].push_back(tempStr2);
+
+                    }
+
+                // Se nao eh um label "sozinho"
+                // Adiciona no vator
                 } else {
 
-                    // Adiciona os tokens ao vetor
-                    codeLines[lineCount].push_back(tempStr);
-                    codeLines[lineCount].push_back(tempStr2);
+                    // Adiciona na tabela de labels
+                    labels[tempStr] = 0;
 
+                    codeLines[lineCount].push_back(tempStr+":");
+                
                 }
 
-            // Achou um define pro token
+            // Ve se possui define declarado
             } else if (defines.find(tempStr) != defines.end()) {
 
                 // Adiciona o valor do define ao vetor
                 codeLines[lineCount].push_back(defines[tempStr]);
 
+            // Se nao so coloca no vetor de tokens
             } else {
 
-                // Adiciona os tokens ao vetor
+                // Adiciona o token ao vetor
                 codeLines[lineCount].push_back(tempStr);
 
             }
-        }
-    }
+
+        } // END WHILE que pega palavra a palavra de acordo com os espacos
+
+    } // END FOR que le linha a linha
+
 }
 
 // Compilacao em si. Gera o codigo objeto.
