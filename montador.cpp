@@ -102,6 +102,7 @@ void readAndPreProcess (const char* fileName) {
     int textMemAddr = textStartAddress;
     int dataMemAddr = 0;
     int BSSMemAddr = 0;
+    stringstream tempSS;
 
     // Le linha a linha
 	for (int lineCount = 1; getline(infile, line); ++lineCount) {
@@ -125,11 +126,6 @@ void readAndPreProcess (const char* fileName) {
 
             // Ve se eh um label / define
             if (":" == tempStr.substr(tempStr.length() - 1, 1)) {
-                
-                //verifica se ja está na tabela
-                /*if
-                errors.push("ERRO NA LINHA " + tempSS.str() + ": Rotulo ja declarado");
-                tempSS.str("");*/
 
                 // Ve se ainda restam tokens na linha
                 if (iss.rdbuf()->in_avail() != 0) {
@@ -146,21 +142,32 @@ void readAndPreProcess (const char* fileName) {
                         string tempStr3;
                         iss >> tempStr3;
 
-                        // Coloca o valor do EQU na tabela de defines
-                        defines[tempStr] = tempStr3;
+                        // Se define já existe
+                        if (defines.find(tempStr3) != defines.end()){
+                            tempSS << lineCount;
+                            errors.push("ERRO NA LINHA " + tempSS.str() + ": EQU ja declarado");
+                            tempSS.str("");
+                        } else {
+                            // Coloca o valor do EQU na tabela de defines
+                            defines[tempStr] = tempStr3;
+                        }
 
                     // Se nao eh so um label
                     // Com algo a mais na mesma linha
                     } else {
 
-                        // Adiciona na tabela de labels
-                        labels[tempStr] = textMemAddr;
-
+                        if (labels.find(tempStr) != labels.end()){
+                            tempSS << lineCount;
+                            errors.push("ERRO NA LINHA " + tempSS.str() + ": Label ja declarado");
+                            tempSS.str("");
+                        } else {
+                            // Adiciona na tabela de labels
+                            labels[tempStr] = textMemAddr;
+                        }
+                        
                         // Adiciona endereco de memoria
                         if (instructions.find(tempStr2) != instructions.end())
                             textMemAddr += get<3>(instructions[tempStr2]);
-                        //else if ("CONST" == tempStr2)
-                            //dataMemAddr += 4;
 
                         // Adiciona os tokens ao vetor
                         codeLines[lineCount].push_back(tempStr+":");
@@ -172,8 +179,14 @@ void readAndPreProcess (const char* fileName) {
                 // Adiciona no vator
                 } else {
 
-                    // Adiciona na tabela de labels
-                    labels[tempStr] = textMemAddr;
+                    if (labels.find(tempStr) != labels.end()){
+                        tempSS << lineCount;
+                        errors.push("ERRO NA LINHA " + tempSS.str() + ": Label ja declarado");
+                        tempSS.str("");
+                    } else {
+                        // Adiciona na tabela de labels
+                        labels[tempStr] = textMemAddr;
+                    }
 
                     codeLines[lineCount].push_back(tempStr+":");
                 
@@ -196,8 +209,6 @@ void readAndPreProcess (const char* fileName) {
             // Adiciona endereco de memoria
             if (instructions.find(tempStr) != instructions.end())
                 textMemAddr += get<3>(instructions[tempStr]);
-            //else if ("CONST" == tempStr)
-                //dataMemAddr += 4;
 
         } // END WHILE que pega palavra a palavra de acordo com os espacos
 
@@ -211,6 +222,7 @@ void readAndPreProcess (const char* fileName) {
 void compile () {
 
     bool achouSectionText = false;
+    bool achouSectionData = false;
     CodeSection codeSection = NONE;
     stringstream tempSS;
     int memPos = 0;
@@ -255,7 +267,7 @@ void compile () {
             for (Tokens::iterator token = codeLine->second.begin() + 1; token != codeLine->second.end(); ++token) {
 
                 // Achou um label na tabela
-                //if (labels.find(*token) != labels.end()) {
+                if (labels.find(*token) != labels.end()) {
                     
                     string auxStr = get<1>(instructions[codeLine->second.front()]);
                     strReplace(auxStr, "<ARG1>", *token);
@@ -290,12 +302,11 @@ void compile () {
 
                     outputText.append("\n");
 
-                // Achou um define na tabela
-                /*} else {
-                    tempSS << codeLine->first;
+                } else {
+                    tempSS << dec << codeLine->first;
                     errors.push("ERRO NA LINHA " + tempSS.str() + ": O Label "+ *token + " nao existe.");
                     tempSS.str("");
-                }*/
+                }
             }
 
             memPos += get<3>(instructions[codeLine->second.front()]);
@@ -309,17 +320,34 @@ void compile () {
             if ("SECTION" == codeLine->second.front()) {
 
                 if ("TEXT" == codeLine->second[1]) {
+                    if (achouSectionText){
+                        tempSS << dec << codeLine->first;
+                        errors.push("ERRO NA LINHA " + tempSS.str() + ": SECTION TEXT ja foi declarada.");
+                        tempSS.str("");
+                    }
                     codeSection = TEXT;
                     achouSectionText = true;
                 } else if ("DATA" == codeLine->second[1]) {
+                    if (achouSectionData){
+                        tempSS << dec << codeLine->first;
+                        errors.push("ERRO NA LINHA " + tempSS.str() + ": SECTION DATA ja foi declarada.");
+                        tempSS.str("");
+                    }
                     codeSection = DATA;
+                    achouSectionData = true;
                 } else {
-                    tempSS << codeLine->first;
+                    tempSS << dec << codeLine->first;
                     errors.push("ERRO NA LINHA " + tempSS.str() + ": O argumento "+ codeLine->second[1] + " eh invalido.");
                     tempSS.str("");
                 }
 
             } else if ("SPACE" == codeLine->second.front()) {
+
+                if (DATA != codeSection) {
+                    tempSS << dec << codeLine->first;
+                    errors.push("ERRO NA LINHA " + tempSS.str() + ": SPACE deve estar na SECTION DATA.");
+                    tempSS.str("");
+                }
 
                 outputBSS.append("resd ");
 
@@ -336,6 +364,12 @@ void compile () {
 
 
             } else if ("CONST" == codeLine->second.front()) {
+
+                if (DATA != codeSection) {
+                    tempSS << dec << codeLine->first;
+                    errors.push("ERRO NA LINHA " + tempSS.str() + ": CONST deve estar na SECTION DATA.");
+                    tempSS.str("");
+                }
 
                 outputData.append("dd "+codeLine->second[1]+"\n");
 
@@ -413,6 +447,8 @@ int main(int argc, char const *argv[]) {
     }
 
     compile();
+
+    cout << endl;
 
     // Sem erros de traducao
     // Escreve o arquivo de saida
