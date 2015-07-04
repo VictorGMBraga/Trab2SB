@@ -60,20 +60,20 @@ bool strReplace(std::string& str, const std::string& from, const std::string& to
 // Cada instrucao possui: Qtd. Operandos, Instrucao IA-32, OpCode IA-32, Tamanho
 void declareInstructions () {
 
-    instructions["ADD"]         = make_tuple(1, "\n\tadd eax, [<ARG1>]",                            "03 05 <ADDR1>",                           6);
-    instructions["SUB"]         = make_tuple(1, "\n\tsub eax, [<ARG1>]",                            "2B 05 <ADDR1>",                           6);
-    instructions["MULT"]        = make_tuple(1, "\n\timul eax, [<ARG1>]",                           "0F AF <ADDR1>",                        7);
-    instructions["DIV"]         = make_tuple(1, "\n\tmov ebx, [<ARG1>]\n\tidiv ebx",                "8B 1D <ADDR1>\nF7 FB",                  8);
-    instructions["JMP"]         = make_tuple(1, "\n\tjmp <ARG1>",                                   "EB <RELADDR>",                         2);
-    instructions["JMPN"]        = make_tuple(1, "\n\tcmp eax, 0\n\tjl <ARG1>",                      "83 F8 00\n7C <RELADDR>",                5);
-    instructions["JMPP"]        = make_tuple(1, "\n\tcmp eax, 0\n\tjg <ARG1>",                      "83 F8 00\n7F <RELADDR>",                5);
-    instructions["JMPZ"]        = make_tuple(1, "\n\tcmp eax, 0\n\tje <ARG1>",                      "83 F8 00\n74 <RELADDR>",                5);
-    instructions["COPY"]        = make_tuple(2, "\n\tmov eax, [<ARG1>]\n\tmov [<ARG2>], eax",       "A1 <ADDR1>\nA3 <ADDR2>",               10);
-    instructions["LOAD"]        = make_tuple(1, "\n\tmov eax, [<ARG1>]",                            "A1 <ADDR1>",                           5);
-    instructions["STORE"]       = make_tuple(1, "\n\tmov [<ARG1>], eax",                            "A3 <ADDR1>",                           5);
-    instructions["INPUT"]       = make_tuple(1, "\n\tcall LerInteiro\n\tmov DWORD [<ARG1>], eax",   " ",                                    2); // ver
-    instructions["OUTPUT"]      = make_tuple(1, "\n\tmov eax, [<ARG1>]\n\tcall EscreverInteiro",    "B8 06",                                2); // ver
-    instructions["STOP"]        = make_tuple(0, "\n\tmov eax, 1\n\tmov ebx, 0\n\tint 80h",          "B8 01 00 00 00\nBB 00 00 00 00\nCD 80", 12);
+    instructions["ADD"]         = make_tuple(1, "\nadd eax, [<ARG1>]",                            "03 05 <ADDR1>",                       6);
+    instructions["SUB"]         = make_tuple(1, "\nsub eax, [<ARG1>]",                            "2B 05 <ADDR1>",                       6);
+    instructions["MULT"]        = make_tuple(1, "\nimul eax, [<ARG1>]",                           "0F AF <ADDR1>",                       7);
+    instructions["DIV"]         = make_tuple(1, "\nmov ebx, [<ARG1>]\nidiv ebx",                "8B 1D <ADDR1>\nF7 FB",                  8);
+    instructions["JMP"]         = make_tuple(1, "\njmp <ARG1>",                                   "EB <RELADDR>",                        2);
+    instructions["JMPN"]        = make_tuple(1, "\ncmp eax, 0\njl <ARG1>",                      "83 F8 00\n7C <RELADDR>",                5);
+    instructions["JMPP"]        = make_tuple(1, "\ncmp eax, 0\njg <ARG1>",                      "83 F8 00\n7F <RELADDR>",                5);
+    instructions["JMPZ"]        = make_tuple(1, "\ncmp eax, 0\nje <ARG1>",                      "83 F8 00\n74 <RELADDR>",                5);
+    instructions["COPY"]        = make_tuple(2, "\nmov eax, [<ARG1>]\nmov [<ARG2>], eax",       "A1 <ADDR1>\nA3 <ADDR2>",               10);
+    instructions["LOAD"]        = make_tuple(1, "\nmov eax, [<ARG1>]",                            "A1 <ADDR1>",                          5);
+    instructions["STORE"]       = make_tuple(1, "\nmov [<ARG1>], eax",                            "A3 <ADDR1>",                          5);
+    instructions["INPUT"]       = make_tuple(1, "\ncall LerInteiro\nmov DWORD [<ARG1>], eax",   " ",                                     2); // ver
+    instructions["OUTPUT"]      = make_tuple(1, "\nmov eax, [<ARG1>]\ncall EscreverInteiro",    " ",                                     2); // ver
+    instructions["STOP"]        = make_tuple(0, "\nmov eax, 1\nmov ebx, 0\nint 80h",          "B8 01 00 00 00\nBB 00 00 00 00\nCD 80",  12);
 
 }
 
@@ -145,7 +145,7 @@ void readAndPreProcess (const char* fileName) {
                         // Se define já existe
                         if (defines.find(tempStr3) != defines.end()){
                             tempSS << lineCount;
-                            errors.push("ERRO NA LINHA " + tempSS.str() + ": EQU ja declarado");
+                            errors.push("ERRO NA LINHA " + tempSS.str() + ": EQU ja declarado.");
                             tempSS.str("");
                         } else {
                             // Coloca o valor do EQU na tabela de defines
@@ -158,7 +158,7 @@ void readAndPreProcess (const char* fileName) {
 
                         if (labels.find(tempStr) != labels.end()){
                             tempSS << lineCount;
-                            errors.push("ERRO NA LINHA " + tempSS.str() + ": Label ja declarado");
+                            errors.push("ERRO NA LINHA " + tempSS.str() + ": Label ja declarado.");
                             tempSS.str("");
                         } else {
                             // Adiciona na tabela de labels
@@ -179,9 +179,12 @@ void readAndPreProcess (const char* fileName) {
                 // Adiciona no vator
                 } else {
 
+                    // Remove o ':'
+                    tempStr = tempStr.substr(0, tempStr.length() - 1);
+
                     if (labels.find(tempStr) != labels.end()){
                         tempSS << lineCount;
-                        errors.push("ERRO NA LINHA " + tempSS.str() + ": Label ja declarado");
+                        errors.push("ERRO NA LINHA " + tempSS.str() + ": Label ja declarado.");
                         tempSS.str("");
                     } else {
                         // Adiciona na tabela de labels
@@ -225,7 +228,7 @@ void compile () {
     bool achouSectionData = false;
     CodeSection codeSection = NONE;
     stringstream tempSS;
-    int memPos = 0;
+    int memPos = 0x08048080;
     
     // Le o codigo linha a linha
     for (CodeLines::iterator codeLine = codeLines.begin(); codeLine != codeLines.end(); ++codeLine) {
@@ -258,91 +261,111 @@ void compile () {
                 continue;
             }
 
+            // Se a instrucao eh STOP nao existem operandos
             if ("STOP" == codeLine->second.front()) {
+
                 outputText.append(get<1>(instructions[codeLine->second.front()]));
                 codOutputText.append(get<2>(instructions[codeLine->second.front()]));
-            }
 
-            // Procura os argumentos da instrucao na tabela de labels
-            for (Tokens::iterator token = codeLine->second.begin() + 1; token != codeLine->second.end(); ++token) {
+            } else {
 
-                // Achou um label na tabela
-                if (labels.find(*token) != labels.end()) {
+                // Procura um label na tabela
+                if (labels.find(codeLine->second[1]) != labels.end()) {
                     
+                    // Troca <ARG1> pelo nome do label
                     string auxStr = get<1>(instructions[codeLine->second.front()]);
-                    strReplace(auxStr, "<ARG1>", *token);
+                    strReplace(auxStr, "<ARG1>", codeLine->second[1]);
 
+                    // Troca <ADDR1> pelo endereco do label
                     string auxStr2 = get<2>(instructions[codeLine->second.front()]);
-                    tempSS << hex << labels[*token] + dataStartAddress;
+                    tempSS << hex << labels[codeLine->second[1]];
                     strReplace(auxStr2, "<ADDR1>", tempSS.str());
                     tempSS.str("");
 
+                    // Troca <RELADDR> pela endereco relativo do label
+                    int relAddr = labels[codeLine->second[1]] - memPos;
+                    tempSS << hex << relAddr;
+                    strReplace(auxStr2, "<RELADDR>", tempSS.str());
+                    tempSS.str("");
+
+                    // Se eh COPY, tem 2 operandos
                     if ("COPY" == codeLine->second.front()) {
                         
-                        ++token;
-                        strReplace(auxStr, "<ARG2>", *token);
-                        cout << auxStr;
-                        outputText.append(auxStr);
+                        // Troca <ARG2> pelo nome do label
+                        strReplace(auxStr, "<ARG2>", codeLine->second[2]);
                         
-                        tempSS << hex << labels[*token] + dataStartAddress;
+                        // Troca <ADDR2> pelo endereco do label
+                        tempSS << hex << labels[codeLine->second[2]];
                         strReplace(auxStr2, "<ADDR2>", tempSS.str());
                         tempSS.str("");
+
+                        // Escreve nas saidas
+                        outputText.append(auxStr);
                         codOutputText.append(auxStr2+" \n");
 
-                        break;
-
+                    // Nao eh copy
                     } else {
 
-                        cout << auxStr;
+                        // Escreve nas saidas
                         outputText.append(auxStr);
-
                         codOutputText.append(auxStr2+" \n");
 
                     }
 
-                    outputText.append("\n");
-
+                // LABEL inexistente
                 } else {
+
                     tempSS << dec << codeLine->first;
-                    errors.push("ERRO NA LINHA " + tempSS.str() + ": O Label "+ *token + " nao existe.");
+                    errors.push("ERRO NA LINHA " + tempSS.str() + ": O Label "+ codeLine->second[1] + " nao existe.");
                     tempSS.str("");
+                
                 }
+
             }
 
+            // Adiciona tamanho da instrucao ao endereco de memoria
             memPos += get<3>(instructions[codeLine->second.front()]);
 
         // Achou uma Diretiva
         } else if (directives.find(codeLine->second.front()) != directives.end()) {
 
-            // Adiciona o tamanho da diretiva ao contador de posicao de memoria
-            memPos += get<2>(directives[codeLine->second.front()]);
-
+            // DIRETIVA SECTION
             if ("SECTION" == codeLine->second.front()) {
 
                 if ("TEXT" == codeLine->second[1]) {
+
                     if (achouSectionText){
                         tempSS << dec << codeLine->first;
                         errors.push("ERRO NA LINHA " + tempSS.str() + ": SECTION TEXT ja foi declarada.");
                         tempSS.str("");
                     }
+
                     codeSection = TEXT;
                     achouSectionText = true;
+
                 } else if ("DATA" == codeLine->second[1]) {
+
                     if (achouSectionData){
                         tempSS << dec << codeLine->first;
                         errors.push("ERRO NA LINHA " + tempSS.str() + ": SECTION DATA ja foi declarada.");
                         tempSS.str("");
                     }
+
                     codeSection = DATA;
                     achouSectionData = true;
+
                 } else {
+
                     tempSS << dec << codeLine->first;
                     errors.push("ERRO NA LINHA " + tempSS.str() + ": O argumento "+ codeLine->second[1] + " eh invalido.");
                     tempSS.str("");
+
                 }
 
+            // DIRETIVA SPACE
             } else if ("SPACE" == codeLine->second.front()) {
 
+                // Ve se SPACE nao esta na SECTION CODE
                 if (DATA != codeSection) {
                     tempSS << dec << codeLine->first;
                     errors.push("ERRO NA LINHA " + tempSS.str() + ": SPACE deve estar na SECTION DATA.");
@@ -362,7 +385,7 @@ void compile () {
 
                 outputBSS.append("\n");
 
-
+            // DIRETIVA CONST
             } else if ("CONST" == codeLine->second.front()) {
 
                 if (DATA != codeSection) {
@@ -373,21 +396,20 @@ void compile () {
 
                 outputData.append("dd "+codeLine->second[1]+"\n");
 
+            // DIRETIVA IF
             } else if ("IF" == codeLine->second.front()) {
 
-                if ("0" == codeLine->second[1]) {
-
-                    cout << endl << "IF DEU FALSE" << endl;
+                // Se IF eh false, pula a linha seguinte
+                if ("0" == codeLine->second[1])
                     ++codeLine;
 
-                } else {
-
-                    cout << endl << "IF DEU TRUE" << endl;
-
-                }
             }
 
-        
+            // Adiciona o tamanho da diretiva ao contador de posicao de memoria
+            memPos += get<2>(directives[codeLine->second.front()]);
+
+        // Achou um label
+        // Reescreve ele na saida
         } else if (":" == codeLine->second.front().substr(codeLine->second.front().length() - 1 , 1)) {
 
             string labelSemDoisPontos = codeLine->second.front().substr(0, codeLine->second.front().length() - 1);
@@ -399,15 +421,16 @@ void compile () {
             else
                 outputText.append(codeLine->second.front()+" ");
 
-            labels[labelSemDoisPontos] = memPos;
             codeLine->second.erase(codeLine->second.begin());
-            --codeLine;
+            
+            if(!codeLine->second.empty())
+                --codeLine;
 
         // Diretiva/Instrucao nao existe
         } else {
 
             tempSS << codeLine->first;
-            errors.push("ERRO NA LINHA " + tempSS.str() + ": A Diretiva/Instrucao "+codeLine->second.front() + " nao existe.");
+            errors.push("ERRO NA LINHA " + tempSS.str() + ": A Diretiva/Instrucao "+ codeLine->second[0] + " nao existe.");
             tempSS.str("");
         }
     }
@@ -427,6 +450,7 @@ int main(int argc, char const *argv[]) {
     declareInstructions();
     declareDirectives();
     readAndPreProcess(file1);
+
 
     cout << endl << "# LABELS #" << endl;
     for (Labels::iterator i = labels.begin(); i != labels.end(); ++i) {
@@ -448,7 +472,9 @@ int main(int argc, char const *argv[]) {
 
     compile();
 
-    cout << endl;
+    cout << endl << "# SECTION TEXT #" << outputText << endl;
+    cout << endl << "# SECTION DATA #" << endl << outputData << endl;
+    cout << endl << "# SECTION BSS #" << endl << outputBSS << endl << endl;
 
     // Sem erros de traducao
     // Escreve o arquivo de saida
@@ -463,7 +489,6 @@ int main(int argc, char const *argv[]) {
         outputFile << outputText << "\n";
         if (achouInput) 
             outputFile << "\nLerInteiro: \nmov eax, 3 \nmov ebx, 0 \nmov ecx, var \nmov edx, size \nint 0x80 \ncmp DWORD[var], 0xA \nje fim \nmov eax, [temp] \nmul DWORD[dez] \nmov ebx, [var] \nsub ebx, 0x30 \nadd eax, ebx \nmov [temp], eax \njmp LeerInteiro \nfim: \nmov eax, [temp] \nmov DWORD [temp], 0x0 \nret";
-
         if (achouOutput)
             outputFile << "\nEscreverInteiro: \npush ebx \npop eax \nmov cx,7 \nmov esi, var \nadd esi,7 ; tamanho da string \nmov cx,10 \nloop2: mov edx,0 \ndiv cx \nadd dx,30h \nmov [esi],dl \nsub esi,1 \ncmp ax,0 \nje fim \nconv2 \njmp loop2 \nfimconv2: mov eax,4 \nmov ebx,1 \nmov ecx, var \nmov edx, size \nint 80h \nret";        
         outputFile << "\nsection .data \n";
