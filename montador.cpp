@@ -10,8 +10,10 @@
 #include <regex>
 #include <cstring>
 #include <cstdlib>
+//#include <elfio/elfio.hpp>
 
 using namespace std;
+//using namespace ELFIO;
 
 typedef int             LineNumber;
 typedef vector<string>  Tokens;
@@ -38,6 +40,7 @@ CodeLines       codeLines;
 Instructions    instructions;
 Directives      directives;
 Labels          labels;
+Labels          dataLabels;
 Defines         defines;
 string          outputText, outputData, outputBSS;
 string          codOutputText, codOutputData, codOutputBSS;
@@ -47,6 +50,68 @@ int dataStartAddress;
 
 bool achouInput = false;
 bool achouOutput = false;
+/*
+void criaElf ( unsigned char* text, unsigned char* data, char* fileName) {
+    elfio writer;
+    
+    // You can't proceed without this function call!
+    writer.create( ELFCLASS32, ELFDATA2LSB );
+
+    writer.set_os_abi( ELFOSABI_LINUX );
+    writer.set_type( ET_EXEC );
+    writer.set_machine( EM_386 );
+
+    // Create code section
+    section* text_sec = writer.sections.add( ".text" );
+    text_sec->set_type( SHT_PROGBITS );
+    text_sec->set_flags( SHF_ALLOC | SHF_EXECINSTR );
+    text_sec->set_addr_align( 0x10 );
+    
+    text_sec->set_data( text, sizeof( text ) );
+
+    // Create a loadable segment
+    segment* text_seg = writer.segments.add();
+    text_seg->set_type( PT_LOAD );
+    text_seg->set_virtual_address( 0x08048000 ); //Endereco que começa o section text
+    text_seg->set_physical_address( 0x08048000 ); //Endereco || || || ||
+    text_seg->set_flags( PF_X | PF_R );
+    text_seg->set_align( 0x1000 );
+    
+    // Add code section into program segment
+    text_seg->add_section_index( text_sec->get_index(), text_sec->get_addr_align() );
+
+    // Create data section*
+    section* data_sec = writer.sections.add( ".data" );
+    data_sec->set_type( SHT_PROGBITS );
+    data_sec->set_flags( SHF_ALLOC | SHF_WRITE );
+    data_sec->set_addr_align( 0x4 );
+    data_sec->set_data( data, sizeof( data ) ); //tamanho do vetor data
+
+    // Create a read/write segment
+    segment* data_seg = writer.segments.add();
+    data_seg->set_type( PT_LOAD );
+    data_seg->set_virtual_address( 0x08048020 ); //Endereco que comeca o section data
+    data_seg->set_physical_address( 0x08048020 ); //Endereco que começa o section data
+    data_seg->set_flags( PF_W | PF_R );
+    data_seg->set_align( 0x10 );
+
+    // Add code section into program segment
+    data_seg->add_section_index( data_sec->get_index(), data_sec->get_addr_align() );
+
+    section* note_sec = writer.sections.add( ".note" );
+    note_sec->set_type( SHT_NOTE );
+    note_sec->set_addr_align( 1 );
+    note_section_accessor note_writer( writer, note_sec );
+
+    // Setup entry point
+    writer.set_entry( 0x08048000 ); //Endereço do global start
+
+    // Create ELF file
+    writer.save(fileName); //Nome do arquivo Executável
+
+}
+*/
+
 
 bool strReplace(std::string& str, const std::string& from, const std::string& to) {
     size_t start_pos = str.find(from);
@@ -63,17 +128,17 @@ void declareInstructions () {
     instructions["ADD"]         = make_tuple(1, "\nadd eax, [<ARG1>]",                            "03 05 <ADDR1>",                       6);
     instructions["SUB"]         = make_tuple(1, "\nsub eax, [<ARG1>]",                            "2B 05 <ADDR1>",                       6);
     instructions["MULT"]        = make_tuple(1, "\nimul eax, [<ARG1>]",                           "0F AF <ADDR1>",                       7);
-    instructions["DIV"]         = make_tuple(1, "\nmov ebx, [<ARG1>]\nidiv ebx",                "8B 1D <ADDR1>\nF7 FB",                  8);
+    instructions["DIV"]         = make_tuple(1, "\nmov ebx, [<ARG1>]\nidiv ebx",                "8B 1D <ADDR1> F7 FB",                  8);
     instructions["JMP"]         = make_tuple(1, "\njmp <ARG1>",                                   "EB <RELADDR>",                        2);
-    instructions["JMPN"]        = make_tuple(1, "\ncmp eax, 0\njl <ARG1>",                      "83 F8 00\n7C <RELADDR>",                5);
-    instructions["JMPP"]        = make_tuple(1, "\ncmp eax, 0\njg <ARG1>",                      "83 F8 00\n7F <RELADDR>",                5);
-    instructions["JMPZ"]        = make_tuple(1, "\ncmp eax, 0\nje <ARG1>",                      "83 F8 00\n74 <RELADDR>",                5);
-    instructions["COPY"]        = make_tuple(2, "\nmov eax, [<ARG1>]\nmov [<ARG2>], eax",       "A1 <ADDR1>\nA3 <ADDR2>",               10);
+    instructions["JMPN"]        = make_tuple(1, "\ncmp eax, 0\njl <ARG1>",                      "83 F8 00 7C <RELADDR>",                5);
+    instructions["JMPP"]        = make_tuple(1, "\ncmp eax, 0\njg <ARG1>",                      "83 F8 00 7F <RELADDR>",                5);
+    instructions["JMPZ"]        = make_tuple(1, "\ncmp eax, 0\nje <ARG1>",                      "83 F8 00 74 <RELADDR>",                5);
+    instructions["COPY"]        = make_tuple(2, "\nmov eax, [<ARG1>]\nmov [<ARG2>], eax",       "A1 <ADDR1> A3 <ADDR2>",               10);
     instructions["LOAD"]        = make_tuple(1, "\nmov eax, [<ARG1>]",                            "A1 <ADDR1>",                          5);
     instructions["STORE"]       = make_tuple(1, "\nmov [<ARG1>], eax",                            "A3 <ADDR1>",                          5);
-    instructions["INPUT"]       = make_tuple(1, "\ncall LerInteiro\nmov DWORD [<ARG1>], eax",   " ",                                     2); // ver
-    instructions["OUTPUT"]      = make_tuple(1, "\nmov eax, [<ARG1>]\ncall EscreverInteiro",    " ",                                     2); // ver
-    instructions["STOP"]        = make_tuple(0, "\nmov eax, 1\nmov ebx, 0\nint 80h",          "B8 01 00 00 00\nBB 00 00 00 00\nCD 80",  12);
+    instructions["INPUT"]       = make_tuple(1, "\nmov DWORD edi, [<ARG1>]\n call LerInteiro",   "E8 <ADDR1> ",                                     2); // ver
+    instructions["OUTPUT"]      = make_tuple(1, "\nmov edi, [<ARG1>]\ncall EscreverInteiro",    " E8",                                     2); // ver
+    instructions["STOP"]        = make_tuple(0, "\nmov eax, 1\nmov ebx, 0\nint 80h",          "B8 01 00 00 00 BB 00 00 00 00 CD 80",  12);
 
 }
 
@@ -103,6 +168,7 @@ void readAndPreProcess (const char* fileName) {
     int dataMemAddr = 0;
     int BSSMemAddr = 0;
     stringstream tempSS;
+    CodeSection codeSection = NONE;
 
     // Le linha a linha
 	for (int lineCount = 1; getline(infile, line); ++lineCount) {
@@ -117,6 +183,23 @@ void readAndPreProcess (const char* fileName) {
         istringstream iss(line);
         string tempStr;
         while (iss >> tempStr) {
+
+            if ("SECTION" == tempStr) {
+
+                string tempStr2;
+                iss >> tempStr2;
+
+                if ("TEXT" == tempStr2)
+                    codeSection = TEXT;
+                else if ("DATA" == tempStr2)
+                    codeSection = DATA;
+
+                codeLines[lineCount].push_back(tempStr);
+                codeLines[lineCount].push_back(tempStr2);
+
+                continue;
+
+            }
 
             // Ignora comentarios
             if (";" == tempStr.substr(0,1)) break;
@@ -156,13 +239,20 @@ void readAndPreProcess (const char* fileName) {
                     // Com algo a mais na mesma linha
                     } else {
 
-                        if (labels.find(tempStr) != labels.end()){
+                        if ( (labels.find(tempStr) != labels.end()) ||
+                             (dataLabels.find(tempStr) != dataLabels.end())  ){
                             tempSS << lineCount;
                             errors.push("ERRO NA LINHA " + tempSS.str() + ": Label ja declarado.");
                             tempSS.str("");
                         } else {
                             // Adiciona na tabela de labels
-                            labels[tempStr] = textMemAddr;
+                            if(codeSection == TEXT){
+                                labels[tempStr] = textMemAddr;
+                            } else if (codeSection == DATA) {
+
+                                dataLabels[tempStr] = dataMemAddr;
+                                dataMemAddr += 4;
+                            }
                         }
                         
                         // Adiciona endereco de memoria
@@ -176,7 +266,7 @@ void readAndPreProcess (const char* fileName) {
                     }
 
                 // Se nao eh um label "sozinho"
-                // Adiciona no vator
+                // Adiciona no vetor
                 } else {
 
                     // Remove o ':'
@@ -188,7 +278,12 @@ void readAndPreProcess (const char* fileName) {
                         tempSS.str("");
                     } else {
                         // Adiciona na tabela de labels
-                        labels[tempStr] = textMemAddr;
+                        if(codeSection == TEXT){
+                            labels[tempStr] = textMemAddr;
+                        } else if (codeSection == DATA) {
+                            dataLabels[tempStr] = dataMemAddr;
+                            dataMemAddr += 4;
+                        }
                     }
 
                     codeLines[lineCount].push_back(tempStr+":");
@@ -217,7 +312,7 @@ void readAndPreProcess (const char* fileName) {
 
     } // END FOR que le linha a linha
 
-    dataStartAddress = textMemAddr;
+    dataStartAddress = textMemAddr + (4-(textMemAddr % 4));
 
 }
 
@@ -269,23 +364,42 @@ void compile () {
 
             } else {
 
-                // Procura um label na tabela
-                if (labels.find(codeLine->second[1]) != labels.end()) {
+                // Label do TEXT
+                if (labels.find(codeLine->second[1]) != labels.end()){
                     
+                    // Troca <ARG1> pelo nome do label
+                    string auxStr = get<1>(instructions[codeLine->second.front()]);
+                    strReplace(auxStr, "<ARG1>", codeLine->second[1]);
+
+                    /*
+                    // Troca <RELADDR> pela endereco relativo do label
+                    string auxStr2 = get<2>(instructions[codeLine->second.front()]);
+                    int relAddr = labels[codeLine->second[1]] - memPos;
+                    tempSS << hex << relAddr;
+                    strReplace(auxStr2, "<RELADDR>", tempSS.str());
+                    tempSS.str("");
+                    */
+
+                    // Troca <ADDR1> pelo endereco do label
+                    string auxStr2 = get<2>(instructions[codeLine->second.front()]);
+                    tempSS << hex << dataLabels[codeLine->second[1]] + dataStartAddress;
+                    strReplace(auxStr2, "<RELADDR>", tempSS.str().substr(tempSS.str().length() - 2, 2) + " " + tempSS.str().substr(tempSS.str().length() - 4, 2) + " " + tempSS.str().substr(tempSS.str().length() - 6, 2) + " 0" + tempSS.str().substr(tempSS.str().length() - 7, 1) );
+                    tempSS.str("");
+
+                    outputText.append(auxStr);
+                    codOutputText.append(auxStr2);
+
+                // LABEL do DATA
+                } else if (dataLabels.find(codeLine->second[1]) != dataLabels.end()) {
+
                     // Troca <ARG1> pelo nome do label
                     string auxStr = get<1>(instructions[codeLine->second.front()]);
                     strReplace(auxStr, "<ARG1>", codeLine->second[1]);
 
                     // Troca <ADDR1> pelo endereco do label
                     string auxStr2 = get<2>(instructions[codeLine->second.front()]);
-                    tempSS << hex << labels[codeLine->second[1]];
-                    strReplace(auxStr2, "<ADDR1>", tempSS.str());
-                    tempSS.str("");
-
-                    // Troca <RELADDR> pela endereco relativo do label
-                    int relAddr = labels[codeLine->second[1]] - memPos;
-                    tempSS << hex << relAddr;
-                    strReplace(auxStr2, "<RELADDR>", tempSS.str());
+                    tempSS << hex << dataLabels[codeLine->second[1]] + dataStartAddress;
+                    strReplace(auxStr2, "<ADDR1>", tempSS.str().substr(tempSS.str().length() - 2, 2) + " " + tempSS.str().substr(tempSS.str().length() - 4, 2) + " " + tempSS.str().substr(tempSS.str().length() - 6, 2) + " 0" + tempSS.str().substr(tempSS.str().length() - 7, 1) );
                     tempSS.str("");
 
                     // Se eh COPY, tem 2 operandos
@@ -295,20 +409,20 @@ void compile () {
                         strReplace(auxStr, "<ARG2>", codeLine->second[2]);
                         
                         // Troca <ADDR2> pelo endereco do label
-                        tempSS << hex << labels[codeLine->second[2]];
-                        strReplace(auxStr2, "<ADDR2>", tempSS.str());
+                        tempSS << hex << dataLabels[codeLine->second[2]] + dataStartAddress;
+                        strReplace(auxStr2, "<ADDR2>", tempSS.str().substr(tempSS.str().length() - 2, 2) + " " + tempSS.str().substr(tempSS.str().length() - 4, 2) + " " + tempSS.str().substr(tempSS.str().length() - 6, 2) + " 0" + tempSS.str().substr(tempSS.str().length() - 7, 1));
                         tempSS.str("");
 
                         // Escreve nas saidas
                         outputText.append(auxStr);
-                        codOutputText.append(auxStr2+" \n");
+                        codOutputText.append(auxStr2+" ");
 
                     // Nao eh copy
                     } else {
 
                         // Escreve nas saidas
                         outputText.append(auxStr);
-                        codOutputText.append(auxStr2+" \n");
+                        codOutputText.append(auxStr2+" ");
 
                     }
 
@@ -378,12 +492,15 @@ void compile () {
                 if (codeLine->second.size() == 2) {
                     outputBSS.append(codeLine->second[1]);
 
+                    for (int i = 0; i < atoi(codeLine->second[1].c_str()); ++i) {
+                        codOutputBSS.append(" 00");
+                    }
+
                 // Se nao reserva so um endereco
                 } else {
                     outputBSS.append("1");
+                    codOutputBSS.append(" 00");
                 }
-
-                outputBSS.append("\n");
 
             // DIRETIVA CONST
             } else if ("CONST" == codeLine->second.front()) {
@@ -395,6 +512,13 @@ void compile () {
                 }
 
                 outputData.append("dd "+codeLine->second[1]+"\n");
+                int tempint = atoi(codeLine->second[1].c_str());
+                tempSS << hex << tempint;
+                if(tempint > 15)
+                    codOutputData.append(" "+tempSS.str());
+                else
+                    codOutputData.append(" 0"+tempSS.str());
+                tempSS.str("");
 
             // DIRETIVA IF
             } else if ("IF" == codeLine->second.front()) {
@@ -419,7 +543,7 @@ void compile () {
             else if ("CONST" == codeLine->second[1])
                 outputData.append(labelSemDoisPontos+" ");
             else
-                outputText.append(codeLine->second.front()+" ");
+                outputText.append("\n"+codeLine->second.front()+" ");
 
             codeLine->second.erase(codeLine->second.begin());
             
@@ -452,8 +576,13 @@ int main(int argc, char const *argv[]) {
     readAndPreProcess(file1);
 
 
-    cout << endl << "# LABELS #" << endl;
+    /*cout << endl << "# LABELS #" << endl;
     for (Labels::iterator i = labels.begin(); i != labels.end(); ++i) {
+        cout << i->first << ": " << hex << i->second << endl;
+    }
+
+    cout << endl << "# LABELS DATA #" << endl;
+    for (Labels::iterator i = dataLabels.begin(); i != dataLabels.end(); ++i) {
         cout << i->first << ": " << hex << i->second << endl;
     }
 
@@ -468,13 +597,13 @@ int main(int argc, char const *argv[]) {
             cout << *j << " ";
         }
         cout << endl;
-    }
+    }*/
 
     compile();
 
-    cout << endl << "# SECTION TEXT #" << outputText << endl;
+    /*cout << endl << "# SECTION TEXT #" << outputText << endl;
     cout << endl << "# SECTION DATA #" << endl << outputData << endl;
-    cout << endl << "# SECTION BSS #" << endl << outputBSS << endl << endl;
+    cout << endl << "# SECTION BSS #" << endl << outputBSS << endl << endl;*/
 
     // Sem erros de traducao
     // Escreve o arquivo de saida
@@ -488,9 +617,9 @@ int main(int argc, char const *argv[]) {
         outputFile << "section .text\nglobal _start\n_start:";
         outputFile << outputText << "\n";
         if (achouInput) 
-            outputFile << "\nLerInteiro: \nmov eax, 3 \nmov ebx, 0 \nmov ecx, var \nmov edx, size \nint 0x80 \ncmp DWORD[var], 0xA \nje fim \nmov eax, [temp] \nmul DWORD[dez] \nmov ebx, [var] \nsub ebx, 0x30 \nadd eax, ebx \nmov [temp], eax \njmp LeerInteiro \nfim: \nmov eax, [temp] \nmov DWORD [temp], 0x0 \nret";
+            outputFile << "\nLerInteiro:\nenter 4,0\npush eax\nmov eax, 3\nmov ebx,0\nmov ecx, [ebp-4]\nmov edx, 16\nint 80h\nmov esi, [ebp-4]\nmov ecx, 0\nLoop1:\ncmp dword esi, 0Ah\nje fim\ncmp dword esi, 00h\nje fim\nsub esi, 30h\nimul ecx,ecx,10 \nadd ecx, ebx\ninc esi\njmp Loop1\nfim: mov [edi], ecx\npop eax\nleave\nret";
         if (achouOutput)
-            outputFile << "\nEscreverInteiro: \npush ebx \npop eax \nmov cx,7 \nmov esi, var \nadd esi,7 ; tamanho da string \nmov cx,10 \nloop2: mov edx,0 \ndiv cx \nadd dx,30h \nmov [esi],dl \nsub esi,1 \ncmp ax,0 \nje fim \nconv2 \njmp loop2 \nfimconv2: mov eax,4 \nmov ebx,1 \nmov ecx, var \nmov edx, size \nint 80h \nret";        
+            outputFile << "\nEscreverInteiro: \npush ebx \npop eax \nmov cx,7 \nmov esi, var \nadd esi,7 \nmov cx,10 \nloop2: mov edx,0 \ndiv cx \nadd dx,30h \nmov [esi],dl \nsub esi,1 \ncmp ax,0 \nje fim \nconv2 \njmp loop2 \nfimconv2: mov eax,4 \nmov ebx,1 \nmov ecx, var \nmov edx, size \nint 80h \nret";        
         outputFile << "\nsection .data \n";
         outputFile << outputData << "\n";
         outputFile << "section .bss \n";
@@ -503,9 +632,43 @@ int main(int argc, char const *argv[]) {
         ofstream outputFile2;
         outputFile2.open(file3);
         outputFile2 << codOutputText;
+        if (achouInput) 
+            outputFile2 << "";
         outputFile2 << codOutputData;
         outputFile2 << codOutputBSS;
         outputFile2.close();
+
+
+        /*cout << endl << "# COD EM NUMEROS #" << endl;*/
+        string codOutputTemp = codOutputText;
+        string dataOutputTemp =  codOutputData + codOutputBSS;
+        
+        stringstream tempSS(codOutputTemp);
+        stringstream tempSS2(dataOutputTemp);
+
+        //cout << "TAMANHO DA SS: " << tempSS.rdbuf()->in_avail() << endl;
+
+        unsigned char *buffer1 = NULL;
+        unsigned char *buffer2 = NULL;
+
+        buffer1 = (unsigned char*)calloc(tempSS.rdbuf()->in_avail(), sizeof(unsigned char));
+        buffer2 = (unsigned char*)calloc(tempSS2.rdbuf()->in_avail(), sizeof(unsigned char));
+
+        int cont = 0;
+        string tempStr;
+        while (tempSS >> tempStr) {
+            unsigned char tempChar = (unsigned char)strtol(tempStr.c_str(), NULL, 16);
+            //cout << hex << (unsigned int)tempChar << " ";
+            buffer1[cont] = tempChar;
+        }
+
+        cont = 0;
+        while (tempSS2 >> tempStr) {
+            unsigned char tempChar = (unsigned char)strtol(tempStr.c_str(), NULL, 16);
+            //cout << hex << (unsigned int)tempChar << " ";
+            buffer2[cont] = tempChar;
+        }
+
 
         /*abrir o .cod no modo r e no modo w
 
