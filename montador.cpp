@@ -10,10 +10,10 @@
 #include <regex>
 #include <cstring>
 #include <cstdlib>
-//#include <elfio/elfio.hpp>
+#include <elfio/elfio.hpp>
 
 using namespace std;
-//using namespace ELFIO;
+using namespace ELFIO;
 
 typedef int             LineNumber;
 typedef vector<string>  Tokens;
@@ -50,8 +50,8 @@ int dataStartAddress;
 
 bool achouInput = false;
 bool achouOutput = false;
-/*
-void criaElf ( unsigned char* text, unsigned char* data, char* fileName) {
+
+void criaElf ( const char* text, const char* data, const char* fileName) {
     elfio writer;
     
     // You can't proceed without this function call!
@@ -90,8 +90,8 @@ void criaElf ( unsigned char* text, unsigned char* data, char* fileName) {
     // Create a read/write segment
     segment* data_seg = writer.segments.add();
     data_seg->set_type( PT_LOAD );
-    data_seg->set_virtual_address( 0x08048020 ); //Endereco que comeca o section data
-    data_seg->set_physical_address( 0x08048020 ); //Endereco que começa o section data
+    data_seg->set_virtual_address( dataStartAddress ); //Endereco que comeca o section data
+    data_seg->set_physical_address( dataStartAddress ); //Endereco que começa o section data
     data_seg->set_flags( PF_W | PF_R );
     data_seg->set_align( 0x10 );
 
@@ -110,7 +110,7 @@ void criaElf ( unsigned char* text, unsigned char* data, char* fileName) {
     writer.save(fileName); //Nome do arquivo Executável
 
 }
-*/
+
 
 
 bool strReplace(std::string& str, const std::string& from, const std::string& to) {
@@ -314,6 +314,7 @@ void readAndPreProcess (const char* fileName) {
 
     dataStartAddress = textMemAddr + (4-(textMemAddr % 4));
 
+
 }
 
 // Compilacao em si. Gera o codigo objeto.
@@ -327,17 +328,22 @@ void compile () {
     
     // Le o codigo linha a linha
     for (CodeLines::iterator codeLine = codeLines.begin(); codeLine != codeLines.end(); ++codeLine) {
+        
 
         // Achou uma instrucao
         if (instructions.find(codeLine->second.front()) != instructions.end()) {
 
             // Se existe input, adiciona a funcao LerInteiro
             if ("INPUT" == codeLine->second[0]) {
+                if (!achouInput)
+                    dataStartAddress+=59;//Tamanho do LerInteiro
                 achouInput = true;
             }
 
             // Se existe output, adiciona a funcao EscreverInteiro
             if ("OUTPUT" == codeLine->second[0]) {
+                if (!achouOutput)
+                    dataStartAddress+=66; // tamanho do EscreverInteiro
                 achouOutput = true;
             }
 
@@ -633,7 +639,9 @@ int main(int argc, char const *argv[]) {
         outputFile2.open(file3);
         outputFile2 << codOutputText;
         if (achouInput) 
-            outputFile2 << "";
+            outputFile2 << " c8 04 00 00 50 b8 03 00 00 00 bb 00 00 00 00 8b 4d fc ba 10 00 00 00 cd 80 8b 75 fc b9 00 00 00 00 83 fe 0a 74 10 83 fe 00 74 0b 83 ee 30 6b c9 0a 01 d9 46 eb eb 89 03 58 c9 c3";
+        if (achouOutput) 
+            outputFile2 << " c8 04 00 00 50 8b 75 fc b9 0a 00 00 00 c7 06 00 00 00 00 89 f8 f7 f1 66 83 c2 30 01 d9 66 89 16 4e 66 83 f8 00 74 02 eb ea 89 0f b8 04 00 00 00 bb 00 00 00 00 8b 4d fc ba 10 00 00 00 cd 80 58 c9 c3";
         outputFile2 << codOutputData;
         outputFile2 << codOutputBSS;
         outputFile2.close();
@@ -669,6 +677,7 @@ int main(int argc, char const *argv[]) {
             buffer2[cont] = tempChar;
         }
 
+        criaElf((const char*)buffer1, (const char*)buffer2, argv[1]);
 
         /*abrir o .cod no modo r e no modo w
 

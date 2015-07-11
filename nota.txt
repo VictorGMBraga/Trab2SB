@@ -1,0 +1,52 @@
+---------------------------------------------------------------------------------------
+.Bin
+teste1.asm
++0.5 OK
+teste2.asm
++0.5 OK
+---------------------------------------------------------------------------------------
+.Elf
+calculadora.asm
++0.75 OK
+prog1.asm
++0.5 OK
+Th3n.s
++0 erro no terminal "error in './montador': free() ..."
+---------------------------------------------------------------------------------------
+.Erros
+erro-decl-ausente
++0 Não detectado
+erro-decl-repetida
++0.25 OK
+erro-diretiva1
++0 erro no terminal "error in './montador': free() ..."
+erro-deretiva2
++0 erro no terminal "error in './montador': free() ..."
+---------------------------------------------------------------------------------------
+.IF
+Triangulo.asm
++1 OK
+---------------------------------------------------------------------------------------
+.Tradutor
+Bin.asm
++0 Indica section text faltante
+
+Calculadora.asm
++0.8 OK
+
+Fatorial.asm
++0.7 OK
+
+Fibonacci.asm
++0.7 OK
+
+Instrucoes.asm
++0.7 OK
+
+Zerinho.asm
++0 Indica varios erros no arquivo
+
+Th3n.s
++0 erro no terminal "error in './montador': free() ..."
+---------------------------------------------------------------------------------------
+Total : 1 + 1.25 + 1 + cd ELF + 2.9 = 6.4
